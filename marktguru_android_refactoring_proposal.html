@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>marktguru Android — Architecture Refactoring Proposal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --mg-blue:       #1A5FFF;
+    --mg-blue-dark:  #0D3DB5;
+    --mg-blue-light: #5B8FFF;
+    --mg-gradient:   linear-gradient(135deg, #0A1628 0%, #0D2260 60%, #0D3DB5 100%);
+    --mg-orange:     #FF6B35;
+    --mg-orange-soft:#FFF0EA;
+    --mg-green:      #00C48C;
+    --mg-green-soft: #E6FAF4;
+    --mg-red:        #FF3B3B;
+    --mg-red-soft:   #FFF0F0;
+    --mg-yellow:     #FFB800;
+    --mg-yellow-soft:#FFF8E6;
+    --bg:            #F0F4FF;
+    --bg-card:       #FFFFFF;
+    --text-primary:  #0D1B3E;
+    --text-secondary:#4A5578;
+    --text-muted:    #8C96B5;
+    --border:        #DDE4F5;
+    --radius:        12px;
+    --radius-sm:     6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  /* ── HERO ─────────────────────────────────────── */
+  .hero {
+    background: var(--mg-gradient);
+    color: white;
+    padding: 72px 60px 64px;
+    position: relative;
+    overflow: hidden;
+  }
+  /* Grid overlay for techy feel */
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+  }
+  /* Glow blob */
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: -60px; right: -40px;
+    width: 480px; height: 480px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(91,143,255,0.18) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-terminal-bar {
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 24px;
+  }
+  .hero-terminal-bar .dot { width:10px; height:10px; border-radius:50%; }
+  .hero-terminal-bar .dot-red    { background:#FF5F57; }
+  .hero-terminal-bar .dot-yellow { background:#FFBD2E; }
+  .hero-terminal-bar .dot-green  { background:#27C93F; }
+  .hero-terminal-bar .filename {
+    margin-left: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: rgba(255,255,255,0.35); letter-spacing: 0.04em;
+  }
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(91,143,255,0.4);
+    border-radius: 4px;
+    padding: 5px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500; letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+    color: rgba(255,255,255,0.65);
+  }
+  .hero-eyebrow span { width:6px; height:6px; border-radius:50%; background:#FF6B35; box-shadow: 0 0 6px #FF6B35; }
+  .hero h1 {
+    font-size: 50px; font-weight: 900; line-height: 1.08;
+    letter-spacing: -0.03em;
+    max-width: 680px;
+    margin-bottom: 20px;
+  }
+  .hero h1 em { font-style: normal; color: var(--mg-blue-light); }
+  .hero h1 .prompt { font-family: 'JetBrains Mono', monospace; color: #00C48C; font-weight: 400; font-size: 32px; }
+  .hero p {
+    font-size: 16px; font-weight: 400;
+    color: rgba(255,255,255,0.65);
+    max-width: 560px;
+    margin-bottom: 40px;
+    line-height: 1.7;
+  }
+  .hero-meta {
+    display: flex; gap: 0;
+    border: 1px solid rgba(91,143,255,0.25);
+    border-radius: 8px;
+    overflow: hidden;
+    width: fit-content;
+    background: rgba(0,0,0,0.25);
+  }
+  .hero-meta-item {
+    padding: 14px 24px;
+    border-right: 1px solid rgba(91,143,255,0.2);
+  }
+  .hero-meta-item:last-child { border-right: none; }
+  .hero-meta-item .label { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.35); margin-bottom: 5px; }
+  .hero-meta-item .value { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.9); }
+
+  /* ── LAYOUT ───────────────────────────────────── */
+  .container { max-width: 960px; margin: 0 auto; padding: 0 40px; }
+  .section { padding: 60px 0; }
+  .section + .section { border-top: 1px solid var(--border); }
+
+  .section-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mg-blue);
+    margin-bottom: 10px;
+  }
+  .section-eyebrow::before {
+    content: '//';
+    color: var(--mg-blue-light);
+    opacity: 0.6;
+  }
+  .section-title {
+    font-size: 32px; font-weight: 800; letter-spacing: -0.02em;
+    margin-bottom: 12px;
+  }
+  .section-sub {
+    font-size: 16px; color: var(--text-secondary);
+    max-width: 620px;
+    margin-bottom: 40px;
+  }
+
+  /* ── CARDS ────────────────────────────────────── */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+  }
+  .card-grid { display: grid; gap: 16px; }
+  .card-grid-2 { grid-template-columns: 1fr 1fr; }
+  .card-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  /* ── PROBLEM CARDS ────────────────────────────── */
+  .problem-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    border-left: 4px solid var(--mg-red);
+    position: relative;
+  }
+  .problem-card .icon {
+    width: 40px; height: 40px; border-radius: var(--radius-sm);
+    background: var(--mg-red-soft);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; margin-bottom: 14px;
+  }
+  .problem-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .problem-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+  .problem-tag {
+    display: inline-block; margin-top: 10px;
+    background: var(--mg-red-soft); color: var(--mg-red);
+    font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 100px;
+  }
+
+  /* ── ARCHITECTURE DIAGRAM ─────────────────────── */
+  .arch-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 36px;
+    text-align: center;
+  }
+
+  .arch-layer {
+    border-radius: 12px;
+    padding: 0;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .arch-layer-header {
+    padding: 10px 20px 8px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: left;
+  }
+  .arch-layer-body {
+    display: flex; gap: 8px;
+    padding: 0 12px 12px;
+    flex-wrap: wrap;
+  }
+  .arch-chip {
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 12px; font-weight: 600;
+    color: var(--text-primary);
+    flex: 1; min-width: 120px;
+    text-align: center;
+  }
+  .arch-chip.dim { opacity: 0.55; }
+  .arch-chip.highlight { background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+  .layer-app    { background: #EEF3FF; }
+  .layer-app .arch-layer-header { color: var(--mg-blue-dark); }
+
+  .layer-feature { background: #FFF3EE; }
+  .layer-feature .arch-layer-header { color: #C04A1A; }
+
+  .layer-core   { background: #E6FAF4; }
+  .layer-core .arch-layer-header { color: #00805E; }
+
+  .layer-build  { background: #FFF8E6; }
+  .layer-build .arch-layer-header { color: #8A6200; }
+
+  .arch-arrow {
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px; margin: 4px 0 10px;
+    font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.04em;
+  }
+  .arch-arrow svg { flex-shrink: 0; }
+
+  /* ── COMPARISON TABLE ─────────────────────────── */
+  .compare-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px;
+  }
+  .compare-table th {
+    padding: 12px 16px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    text-align: left;
+    border-bottom: 2px solid var(--border);
+  }
+  .compare-table th:first-child { color: var(--text-muted); }
+  .compare-table th.now { color: var(--mg-red); }
+  .compare-table th.future { color: var(--mg-green); }
+  .compare-table td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+  .compare-table td:first-child { color: var(--text-primary); font-weight: 600; font-size: 13px; }
+  .compare-table td.bad { color: var(--mg-red); }
+  .compare-table td.good { color: #008A63; }
+  .compare-table tr:last-child td { border-bottom: none; }
+
+  /* ── PHASE TIMELINE ───────────────────────────── */
+  .phases { display: flex; flex-direction: column; gap: 0; }
+  .phase {
+    display: flex; gap: 24px;
+    padding: 28px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .phase:last-child { border-bottom: none; }
+  .phase-num {
+    flex-shrink: 0;
+    width: 48px; height: 48px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800; color: white;
+  }
+  .phase-1 .phase-num { background: var(--mg-blue); }
+  .phase-2 .phase-num { background: var(--mg-orange); }
+  .phase-3 .phase-num { background: var(--mg-green); }
+  .phase-4 .phase-num { background: var(--mg-blue-dark); }
+
+  .phase-content { flex: 1; }
+  .phase-content h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+  .phase-duration {
+    display: inline-block; margin-bottom: 10px;
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+  .phase-content p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
+  .phase-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .phase-tag {
+    font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 100px;
+    border: 1px solid;
+  }
+  .phase-1 .phase-tag { color: var(--mg-blue); border-color: #C5D6FF; background: #EEF3FF; }
+  .phase-2 .phase-tag { color: var(--mg-orange); border-color: #FFD6C2; background: var(--mg-orange-soft); }
+  .phase-3 .phase-tag { color: #00805E; border-color: #AAECD9; background: var(--mg-green-soft); }
+  .phase-4 .phase-tag { color: var(--mg-blue-dark); border-color: #B8C9F7; background: #EEF3FF; }
+
+  /* ── RISK CARDS ───────────────────────────────── */
+  .risk-card {
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    display: flex; gap: 16px; align-items: flex-start;
+  }
+  .risk-high   { background: var(--mg-red-soft);    border: 1px solid #FFCACA; }
+  .risk-medium { background: var(--mg-yellow-soft);  border: 1px solid #FFE8A3; }
+  .risk-low    { background: var(--mg-green-soft);   border: 1px solid #AAECD9; }
+  .risk-badge {
+    flex-shrink: 0;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 100px;
+    margin-top: 2px;
+  }
+  .risk-high .risk-badge   { background: var(--mg-red);    color: white; }
+  .risk-medium .risk-badge { background: var(--mg-yellow);  color: #4A3200; }
+  .risk-low .risk-badge    { background: var(--mg-green);   color: white; }
+  .risk-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .risk-card p  { font-size: 13px; color: var(--text-secondary); }
+
+  /* ── BENEFIT BLOCKS ───────────────────────────── */
+  .benefit-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+  }
+  .benefit-block .icon-box {
+    width: 44px; height: 44px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; margin-bottom: 14px;
+  }
+  .benefit-block h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .benefit-block p  { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+  .benefit-blue .icon-box  { background: #EEF3FF; }
+  .benefit-green .icon-box { background: var(--mg-green-soft); }
+  .benefit-orange .icon-box { background: var(--mg-orange-soft); }
+
+  /* ── CALLOUT ──────────────────────────────────── */
+  .callout {
+    background: var(--mg-gradient);
+    border-radius: var(--radius);
+    padding: 36px 40px;
+    color: white;
+    display: flex; gap: 24px; align-items: center;
+  }
+  .callout-icon { font-size: 40px; flex-shrink: 0; }
+  .callout h3 { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+  .callout p  { font-size: 15px; color: rgba(255,255,255,0.75); }
+
+  /* ── CODE MONO ────────────────────────────────── */
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    background: #0D1830;
+    color: #5B8FFF;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid rgba(91,143,255,0.2);
+  }
+
+  /* ── MONOLITH DIAGRAM ─────────────────────────── */
+  .mono-vs {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+  }
+  .mono-box {
+    border-radius: var(--radius);
+    padding: 24px;
+    border: 2px solid;
+  }
+  .mono-bad  { border-color: #FFCACA; background: var(--mg-red-soft); }
+  .mono-good { border-color: #AAECD9; background: var(--mg-green-soft); }
+  .mono-box h4 {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .mono-bad h4  { color: var(--mg-red); }
+  .mono-good h4 { color: #007A58; }
+  .mono-item {
+    font-size: 13px; padding: 7px 10px; border-radius: 8px;
+    margin-bottom: 6px; display: flex; align-items: center; gap: 8px;
+  }
+  .mono-bad  .mono-item { background: rgba(255,59,59,0.08); color: #7A1A1A; }
+  .mono-good .mono-item { background: rgba(0,196,140,0.1); color: #005C40; }
+
+  /* ── MODULE TREE ──────────────────────────────── */
+  .tree {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.9;
+    color: #C8D6FF;
+    background: #080F20;
+    border-radius: var(--radius);
+    padding: 0;
+    border: 1px solid rgba(91,143,255,0.2);
+    overflow: hidden;
+  }
+  .tree-bar {
+    background: #0D1830;
+    border-bottom: 1px solid rgba(91,143,255,0.15);
+    padding: 9px 18px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tree-bar .dot { width:9px; height:9px; border-radius:50%; }
+  .tree-bar .dot-r { background:#FF5F57; } .tree-bar .dot-y { background:#FFBD2E; } .tree-bar .dot-g { background:#27C93F; }
+  .tree-bar span { margin-left:8px; font-size:11px; color:rgba(255,255,255,0.25); }
+  .tree-content { padding: 20px 24px; }
+  .tree .t-app    { color: #5B8FFF; font-weight: 600; }
+  .tree .t-core   { color: #00C48C; font-weight: 600; }
+  .tree .t-feat   { color: #FF9A6C; font-weight: 600; }
+  .tree .t-build  { color: #FFB800; font-weight: 600; }
+  .tree .t-sub    { color: #6B7AAA; }
+  .tree .t-comment { color: #3A4A72; font-style: italic; }
+
+  /* ── FOOTER ───────────────────────────────────── */
+  .footer {
+    background: var(--text-primary);
+    color: rgba(255,255,255,0.5);
+    padding: 32px 40px;
+    text-align: center;
+    font-size: 13px;
+  }
+  .footer strong { color: white; }
+
+  /* ── DIVIDER ──────────────────────────────────── */
+  .divider {
+    height: 1px; background: var(--border); margin: 0;
+  }
+
+  /* ── UTILS ────────────────────────────────────── */
+  .text-blue { color: var(--mg-blue); }
+  .text-red  { color: var(--mg-red); }
+  .text-green { color: var(--mg-green); }
+  .mt-24 { margin-top: 24px; }
+  .mt-32 { margin-top: 32px; }
+
+  /* ══════════════════════════════════════════════════
+     RESPONSIVE — TABLET  ≤ 768px
+  ══════════════════════════════════════════════════ */
+  @media (max-width: 768px) {
+    .hero {
+      padding: 48px 24px 44px;
+    }
+    .hero-terminal-bar .filename {
+      display: none;
+    }
+    .hero h1 {
+      font-size: 34px;
+    }
+    .hero h1 .prompt {
+      font-size: 22px;
+    }
+    .hero p {
+      font-size: 14px;
+    }
+    .hero-meta {
+      width: 100%;
+      flex-direction: column;
+    }
+    .hero-meta-item {
+      border-right: none;
+      border-bottom: 1px solid rgba(91,143,255,0.2);
+      padding: 12px 18px;
+    }
+    .hero-meta-item:last-child { border-bottom: none; }
+
+    .container { padding: 0 20px; }
+    .section   { padding: 40px 0; }
+
+    .section-title { font-size: 24px; }
+    .section-sub   { font-size: 14px; margin-bottom: 28px; }
+
+    /* All 2-col and 3-col grids collapse to 1 col */
+    .card-grid-2,
+    .card-grid-3 { grid-template-columns: 1fr; }
+
+    /* Mono before/after grid */
+    .mono-vs { grid-template-columns: 1fr; }
+
+    /* DI comparison grid (inline style, override via class added below) */
+    .di-grid { grid-template-columns: 1fr !important; }
+
+    /* Comparison table: make it scrollable */
+    .card { overflow-x: auto; padding: 16px; }
+    .compare-table { min-width: 520px; }
+
+    /* Arch container padding */
+    .arch-container { padding: 20px 14px; }
+    .arch-chip { min-width: 90px; font-size: 11px; padding: 7px 10px; }
+
+    /* Callout stacks */
+    .callout {
+      flex-direction: column;
+      padding: 28px 20px;
+      gap: 16px;
+    }
+    .callout-icon { font-size: 32px; }
+    .callout h3   { font-size: 18px; }
+    .callout p    { font-size: 14px; }
+
+    /* Phase layout */
+    .phase { gap: 16px; padding: 22px 0; }
+    .phase-content h3 { font-size: 15px; }
+    .phase-content p  { font-size: 13px; }
+
+    /* Risk cards */
+    .risk-card { padding: 16px 18px; gap: 12px; }
+
+    /* Tree */
+    .tree { font-size: 11px; }
+    .tree-content { padding: 16px; overflow-x: auto; white-space: nowrap; }
+
+    /* Footer */
+    .footer { padding: 24px 20px; font-size: 12px; }
+  }
+
+  /* ══════════════════════════════════════════════════
+     RESPONSIVE — MOBILE  ≤ 480px
+  ══════════════════════════════════════════════════ */
+  @media (max-width: 480px) {
+    .hero { padding: 36px 16px 36px; }
+    .hero h1 { font-size: 28px; }
+    .hero h1 .prompt { font-size: 18px; }
+    .hero p  { font-size: 13px; }
+    .hero-eyebrow { font-size: 9px; padding: 4px 10px; }
+
+    .container { padding: 0 16px; }
+    .section   { padding: 32px 0; }
+    .section-title { font-size: 21px; }
+
+    .card { padding: 16px; }
+    .problem-card { padding: 18px; }
+    .benefit-block { padding: 18px; }
+
+    .arch-container { padding: 14px 10px; }
+    .arch-layer-header { font-size: 9px; padding: 8px 12px 6px; }
+    .arch-chip { min-width: 80px; font-size: 10px; padding: 6px 8px; }
+
+    .phase-num { width: 40px; height: 40px; font-size: 16px; border-radius: 10px; }
+    .phase-content h3 { font-size: 14px; }
+
+    .mono-item { font-size: 12px; }
+    .mono-box h4 { font-size: 12px; }
+
+    .callout { padding: 22px 16px; }
+    .callout h3 { font-size: 16px; }
+
+    .risk-card { flex-direction: column; gap: 8px; }
+
+    .tree { font-size: 10.5px; }
+    .tree-bar span { font-size: 9px; }
+
+    .footer { padding: 20px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     HERO
+════════════════════════════════════════════════════════ -->
+<div class="hero">
+  <div class="container">
+    <div class="hero-terminal-bar">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="filename">marktguru/android/ARCHITECTURE_PROPOSAL.md</div>
+    </div>
+    <div class="hero-eyebrow"><span></span>Engineering Proposal · Confidential</div>
+    <h1><span class="prompt">$ </span>Android Architecture<br><em>Refactoring</em> Roadmap</h1>
+    <p>A structured proposal for transitioning the marktguru Android app from its current monolithic codebase to a modern, modular, and fully testable architecture — enabling long-term speed, quality, and team scalability.</p>
+    <div class="hero-meta">
+      <div class="hero-meta-item">
+        <div class="label">Prepared for</div>
+        <div class="value">Engineering &amp; Product Management</div>
+      </div>
+      <div class="hero-meta-item">
+        <div class="label">Urgency</div>
+        <div class="value">🔴 Critical — Act Now</div>
+      </div>
+      <div class="hero-meta-item">
+        <div class="label">Effort</div>
+        <div class="value">Phased · 12–18 months</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     EXECUTIVE SUMMARY
+════════════════════════════════════════════════════════ -->
+<div class="container">
+<div class="section">
+  <div class="section-eyebrow">Why This Matters Now</div>
+  <div class="section-title">Our Android codebase has reached a critical threshold</div>
+  <div class="section-sub">Every new feature we add to the current architecture costs more time than the previous one. Without action, development velocity will continue to decline while bugs and fragility increase.</div>
+
+  <div class="callout">
+    <div class="callout-icon">⚡</div>
+    <div>
+      <h3>The core problem in one sentence</h3>
+      <p>We have a monolithic app written in mixed Java &amp; Kotlin, with XML UI tightly coupled to business logic through Presenters — making it nearly impossible to test, scale, or safely refactor individual features.</p>
+    </div>
+  </div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     CURRENT STATE PROBLEMS
+════════════════════════════════════════════════════════ -->
+<div class="container">
+<div class="section">
+  <div class="section-eyebrow">Current State</div>
+  <div class="section-title">Six critical problems with today's codebase</div>
+  <div class="section-sub">These are not theoretical concerns — they are actively slowing down every sprint today.</div>
+
+  <div class="card-grid card-grid-2">
+
+    <div class="problem-card">
+      <div class="icon">🏗️</div>
+      <h3>Monolithic structure</h3>
+      <p>All features share the same code space. A change in one area risks breaking unrelated parts. There are no clear boundaries between features, making navigation of the code difficult and refactoring dangerous.</p>
+      <div class="problem-tag">Highest Impact</div>
+    </div>
+
+    <div class="problem-card">
+      <div class="icon">🔗</div>
+      <h3>Presenters tightly coupled to XML UI</h3>
+      <p>Business logic lives inside or directly next to UI code (XML layouts + Presenter classes). The UI framework — which is already in maintenance mode — is woven through the logic layer. Changing one requires changing the other.</p>
+      <div class="problem-tag">Blocks UI Migration</div>
+    </div>
+
+    <div class="problem-card">
+      <div class="icon">🧪</div>
+      <h3>Virtually untestable codebase</h3>
+      <p>Because Presenters are bound to the Android framework and XML Views, unit tests cannot run independently of a device or emulator. There is no reliable way to write fast, isolated tests for business logic — meaning bugs reach production.</p>
+      <div class="problem-tag">No Safety Net</div>
+    </div>
+
+    <div class="problem-card">
+      <div class="icon">☕</div>
+      <h3>Java classes in a Kotlin-first world</h3>
+      <p>A significant portion of the codebase is still in Java. This prevents use of modern Kotlin features like coroutines, sealed classes, and value classes. Java/Kotlin interop creates hidden complexity and friction for every developer on the team.</p>
+      <div class="problem-tag">Technical Debt</div>
+    </div>
+
+    <div class="problem-card">
+      <div class="icon">📱</div>
+      <h3>XML UI is in maintenance mode</h3>
+      <p>Google no longer actively invests in the XML View system. Jetpack Compose is the present and future of Android UI. Staying on XML means missing out on modern tooling, better performance, and simpler state handling — and it will become increasingly hard to hire for.</p>
+      <div class="problem-tag">Platform Risk</div>
+    </div>
+
+    <div class="problem-card">
+      <div class="icon">🐌</div>
+      <h3>Feature velocity will keep decreasing</h3>
+      <p>Every new feature added to a monolith increases the weight of everything else. Compile times grow. Side effects multiply. Code reviews become harder. What takes 2 days today will take 5 days in 12 months if we do not change the architecture now.</p>
+      <div class="problem-tag">Business Risk</div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     BEFORE vs AFTER
+════════════════════════════════════════════════════════ -->
+<div class="container">
+<div class="section">
+  <div class="section-eyebrow">Before vs After</div>
+  <div class="section-title">What changes — and how dramatically</div>
+
+  <div class="mono-vs">
+    <div class="mono-box mono-bad">
+      <h4>❌ Today — Monolith</h4>
+      <div class="mono-item">⛔ Single module, everything mixed together</div>
+      <div class="mono-item">⛔ Java + Kotlin interop friction</div>
+      <div class="mono-item">⛔ XML Views + Presenters, tightly coupled</div>
+      <div class="mono-item">⛔ Business logic not unit-testable</div>
+      <div class="mono-item">⛔ Features depend on each other indirectly</div>
+      <div class="mono-item">⛔ Long rebuild times on every change</div>
+      <div class="mono-item">⛔ No clear contracts between layers</div>
+      <div class="mono-item">⛔ Impossible to work in parallel on features</div>
+    </div>
+    <div class="mono-box mono-good">
+      <h4>✅ Target — Modular</h4>
+      <div class="mono-item">✔ Clear feature modules with enforced boundaries</div>
+      <div class="mono-item">✔ 100% Kotlin across all modules</div>
+      <div class="mono-item">✔ Jetpack Compose + ViewModel + MVI</div>
+      <div class="mono-item">✔ Fast, isolated unit tests for all business logic</div>
+      <div class="mono-item">✔ Features completely decoupled from each other</div>
+      <div class="mono-item">✔ Parallel compilation — faster build times</div>
+      <div class="mono-item">✔ Repository / domain interfaces as clear contracts</div>
+      <div class="mono-item">✔ Multiple devs working on features simultaneously</div>
+    </div>
+  </div>
+
+  <div class="mt-32">
+    <div class="card">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th class="now">Now</th>
+            <th class="future">After Refactoring</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Adding a new feature</td>
+            <td class="bad">Risky — touching shared code always has side effects</td>
+            <td class="good">Safe — isolated module, clear boundaries, no unintended impact</td>
+          </tr>
+          <tr>
+            <td>Writing tests</td>
+            <td class="bad">Nearly impossible for business logic without a device</td>
+            <td class="good">Fast JVM unit tests for ViewModels, repositories, and use cases</td>
+          </tr>
+          <tr>
+            <td>Onboarding new devs</td>
+            <td class="bad">Takes weeks to understand the entangled structure</td>
+            <td class="good">Each module is self-contained and easy to navigate</td>
+          </tr>
+          <tr>
+            <td>Migrating the UI</td>
+            <td class="bad">Cannot migrate to Compose while Presenters are coupled to XML</td>
+            <td class="good">Compose + ViewModel is the target state, migration is incremental</td>
+          </tr>
+          <tr>
+            <td>Build times</td>
+            <td class="bad">Full rebuild on most changes</td>
+            <td class="good">Only affected modules recompile — 40–60% faster builds expected</td>
+          </tr>
+          <tr>
+            <td>Long-term maintainability</td>
+            <td class="bad">Worsens with each added feature</td>
+            <td class="good">Scales cleanly; new features never touch existing ones</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     TARGET ARCHITECTURE
+════════════════════════════════════════════════════════ -->
+<div class="container">
+<div class="section">
+  <div class="section-eyebrow">Target Architecture</div>
+  <div class="section-title">A layered, modular structure</div>
+  <div class="section-sub">The new architecture is built around three principles: feature isolation, clean layer separation, and testability-first design.</div>
+
+  <div class="arch-container">
+
+    <div class="arch-layer layer-app">
+      <div class="arch-layer-header">📱 :app — Application entry point</div>
+      <div class="arch-layer-body">
+        <div class="arch-chip highlight">MainActivity</div>
+        <div class="arch-chip highlight">App Navigation Graph</div>
+        <div class="arch-chip highlight">DI Module Wiring</div>
+        <div class="arch-chip highlight">Application Class</div>
+      </div>
+    </div>
+
+    <div class="arch-arrow">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M4 9l3 3 3-3" stroke="#8C96B5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      depends on all feature &amp; core modules
+    </div>
+
+    <div class="arch-layer layer-feature">
+      <div class="arch-layer-header">🧩 :feature — One module per feature area</div>
+      <div class="arch-layer-body">
+        <div class="arch-chip highlight">leaflets</div>
+        <div class="arch-chip highlight">shopping-assistant</div>
+        <div class="arch-chip highlight">search</div>
+        <div class="arch-chip highlight">offers</div>
+        <div class="arch-chip highlight">profile</div>
+        <div class="arch-chip dim">+ more features…</div>
+      </div>
+    </div>
+
+    <div class="arch-arrow">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M4 9l3 3 3-3" stroke="#8C96B5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      each feature has :domain · :data · :presentation sub-modules
+    </div>
+
+    <div class="arch-layer layer-core">
+      <div class="arch-layer-header">⚙️ :core — Shared infrastructure, used by all features</div>
+      <div class="arch-layer-body">
+        <div class="arch-chip highlight">:core:domain</div>
+        <div class="arch-chip highlight">:core:data</div>
+        <div class="arch-chip highlight">:core:presentation</div>
+        <div class="arch-chip highlight">:core:design-system</div>
+        <div class="arch-chip highlight">:core:navigation</div>
+        <div class="arch-chip highlight">:core:analytics</div>
+      </div>
+    </div>
+
+    <div class="arch-arrow">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2v10M4 9l3 3 3-3" stroke="#8C96B5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      convention plugins keep every module's Gradle config consistent
+    </div>
+
+    <div class="arch-layer layer-build">
+      <div class="arch-layer-header">🔧 :build-logic — Gradle convention plugins</div>
+      <div class="arch-layer-body">
+        <div class="arch-chip">android-feature</div>
+        <div class="arch-chip">android-library</div>
+        <div class="arch-chip">domain-module</div>
+        <div class="arch-chip">compose</div>
+        <div class="arch-chip">di-framework</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="mt-32">
+    <div class="tree">
+      <div class="tree-bar">
+        <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+        <span>module_structure.gradle.kts</span>
+      </div>
+      <div class="tree-content">
+<span class="t-comment"># Full module tree — each feature is fully self-contained</span>
+<br>
+<span class="t-build">:build-logic</span>           <span class="t-comment"># Gradle convention plugins — shared build config</span>
+<span class="t-app">:app</span>                    <span class="t-comment"># Wires all modules; no business logic here</span>
+<br>
+<span class="t-core">:core</span>
+  <span class="t-sub">├── :domain</span>          <span class="t-comment"># Shared models, Result type, base errors</span>
+  <span class="t-sub">├── :data</span>            <span class="t-comment"># Ktor client factory, shared DB, token storage</span>
+  <span class="t-sub">├── :presentation</span>    <span class="t-comment"># UiText, ObserveAsEvents, base ViewModel helpers</span>
+  <span class="t-sub">├── :design-system</span>   <span class="t-comment"># Compose components, colors, typography, theme</span>
+  <span class="t-sub">├── :navigation</span>      <span class="t-comment"># Type-safe route definitions, NavHost</span>
+  <span class="t-sub">├── :di</span>              <span class="t-comment"># DI framework setup (Koin or Hilt — TBD)</span>
+  <span class="t-sub">└── :analytics</span>       <span class="t-comment"># Analytics abstraction (Mixpanel, etc.)</span>
+<br>
+<span class="t-feat">:feature:leaflets</span>
+  <span class="t-sub">├── :domain</span>          <span class="t-comment"># Leaflet models, LeafletRepository interface</span>
+  <span class="t-sub">├── :data</span>            <span class="t-comment"># LeafletRepositoryImpl, DTOs, mappers, Room DAOs</span>
+  <span class="t-sub">└── :presentation</span>    <span class="t-comment"># LeafletViewModel, LeafletScreen composable</span>
+<br>
+<span class="t-feat">:feature:shopping-assistant</span>
+  <span class="t-sub">├── :domain</span>
+  <span class="t-sub">├── :data</span>
+  <span class="t-sub">└── :presentation</span>
+<br>
+<span class="t-feat">:feature:search</span>       <span class="t-comment"># … same pattern for every feature</span>
+<span class="t-feat">:feature:offers</span>
+<span class="t-feat">:feature:profile</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-32">
+    <div class="section-eyebrow">The golden rule</div>
+    <div class="card">
+      <p style="font-size:15px; line-height:1.8;">
+        <strong>Features never depend on each other.</strong> If two features need the same data model, it moves to <code>:core:domain</code>. If they share a UI component, it moves to <code>:core:design-system</code>. This boundary is enforced at the Gradle level — a build error prevents accidental cross-feature dependencies before they ever reach code review.
+      </p>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     DEPENDENCY INJECTION
+════════════════════════════════════════════════════════ -->
+<div class="container">
+<div class="section">
+  <div class="section-eyebrow">Dependency Injection</div>
+  <div class="section-title">Koin vs Hilt — choosing the right DI framework</div>
+  <div class="section-sub">The new architecture requires a proper DI framework to wire modules together cleanly. We will evaluate both leading options and choose the best fit for our project before Phase 1 begins.</div>
+
+  <div class="di-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
+
+    <!-- KOIN -->
+    <div style="background:#0D1830; border:1px solid rgba(91,143,255,0.2); border-radius:12px; overflow:hidden;">
+      <div style="background:#0A1428; border-bottom:1px solid rgba(91,143,255,0.15); padding:14px 20px; display:flex; align-items:center; gap:10px;">
+        <div style="background:#1A5FFF; color:white; font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; padding:3px 9px; border-radius:4px; letter-spacing:0.05em;">KOIN</div>
+        <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:rgba(255,255,255,0.3);">insert-koin-android-ext</span>
+      </div>
+      <div style="padding:20px;">
+        <div style="font-size:13px; font-weight:700; color:#5B8FFF; margin-bottom:14px; font-family:'JetBrains Mono',monospace;">// Pure Kotlin, zero annotation processing</div>
+
+        <div style="margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#00C48C; font-size:13px; flex-shrink:0;">✓</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">Pure Kotlin DSL — no annotation processors, no <code>kapt</code>/<code>ksp</code> required for DI itself</span>
+        </div>
+        <div style="margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#00C48C; font-size:13px; flex-shrink:0;">✓</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">Faster build times — no code generation step</span>
+        </div>
+        <div style="margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#00C48C; font-size:13px; flex-shrink:0;">✓</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">Simpler setup in multi-module projects — modules just declare their own Koin modules</span>
+        </div>
+        <div style="margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#00C48C; font-size:13px; flex-shrink:0;">✓</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">Great fit for Kotlin Multiplatform (KMP) if we ever go cross-platform</span>
+        </div>
+        <div style="margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#FF6B6B; font-size:13px; flex-shrink:0;">✗</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">Runtime DI resolution — errors surface at runtime, not compile time</span>
+        </div>
+        <div style="margin-bottom:0; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#FF6B6B; font-size:13px; flex-shrink:0;">✗</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">Less first-party Google tooling integration (WorkManager, Navigation, etc.)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HILT -->
+    <div style="background:#0D1830; border:1px solid rgba(91,143,255,0.2); border-radius:12px; overflow:hidden;">
+      <div style="background:#0A1428; border-bottom:1px solid rgba(91,143,255,0.15); padding:14px 20px; display:flex; align-items:center; gap:10px;">
+        <div style="background:#00C48C; color:#001F15; font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; padding:3px 9px; border-radius:4px; letter-spacing:0.05em;">HILT</div>
+        <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:rgba(255,255,255,0.3);">com.google.dagger:hilt-android</span>
+      </div>
+      <div style="padding:20px;">
+        <div style="font-size:13px; font-weight:700; color:#00C48C; margin-bottom:14px; font-family:'JetBrains Mono',monospace;">// Google-recommended, compile-time safe</div>
+
+        <div style="margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#00C48C; font-size:13px; flex-shrink:0;">✓</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">Compile-time verification — DI errors caught at build time, not production</span>
+        </div>
+        <div style="margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#00C48C; font-size:13px; flex-shrink:0;">✓</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">First-party Google support — deep integration with Jetpack (Navigation, WorkManager, Compose)</span>
+        </div>
+        <div style="margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#00C48C; font-size:13px; flex-shrink:0;">✓</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">Industry standard — easier to hire developers already familiar with it</span>
+        </div>
+        <div style="margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#FF6B6B; font-size:13px; flex-shrink:0;">✗</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">Requires <code>ksp</code> annotation processing — adds build time overhead</span>
+        </div>
+        <div style="margin-bottom:8px; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#FF6B6B; font-size:13px; flex-shrink:0;">✗</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">More boilerplate in multi-module setups (component dependencies, subcomponents)</span>
+        </div>
+        <div style="margin-bottom:0; display:flex; gap:10px; align-items:flex-start;">
+          <span style="color:#FF6B6B; font-size:13px; flex-shrink:0;">✗</span>
+          <span style="font-size:13px; color:#8C9EC8; line-height:1.55;">Android-only — not usable if we ever target KMP/non-Android platforms</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Decision card -->
+  <div style="background:#F0F4FF; border:1px solid var(--border); border-radius:12px; padding:24px 28px; display:flex; gap:16px; align-items:flex-start;">
+    <div style="font-size:28px; flex-shrink:0; margin-top:2px;">🔍</div>
+    <div>
+      <h3 style="font-size:15px; font-weight:700; margin-bottom:8px;">Our approach: evaluate and decide in Phase 1</h3>
+      <p style="font-size:13px; color:var(--text-secondary); line-height:1.7;">
+        Both frameworks are production-proven on large Android apps. The right choice depends on factors specific to our team: existing familiarity, future KMP ambitions, and preferred trade-off between build speed (Koin) and compile-time safety (Hilt). <strong>We will run a structured spike in Phase 1</strong> — build the same <code>:core:di</code> module with both, benchmark build time impact, and choose the one that best fits our long-term roadmap. The rest of the architecture is framework-agnostic and is not affected by this decision.
+      </p>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     WHY COMPOSE MIGRATION CANNOT BE STANDALONE
+════════════════════════════════════════════════════════ -->
+<div class="container">
+<div class="section">
+  <div class="section-eyebrow">Important Note for Management</div>
+  <div class="section-title">We cannot "just switch to Compose"</div>
+  <div class="section-sub">This is a common misconception that needs to be addressed directly before planning begins.</div>
+
+  <div class="callout" style="background: linear-gradient(135deg, #C04A1A 0%, #8A2A00 100%); margin-bottom: 28px;">
+    <div class="callout-icon">🚧</div>
+    <div>
+      <h3>Compose requires ViewModel — Presenter is not compatible</h3>
+      <p>Jetpack Compose is built around state flowing down from ViewModels. Our current Presenters hold a direct reference to the View (XML layout), which fundamentally conflicts with Compose's unidirectional data flow model. Migrating to Compose without first replacing Presenters with ViewModels would produce a system that is worse than either approach alone.</p>
+    </div>
+  </div>
+
+  <div class="card-grid card-grid-3">
+    <div class="benefit-block benefit-blue">
+      <div class="icon-box">1️⃣</div>
+      <h3>First: Architecture layer</h3>
+      <p>Replace Presenters with ViewModels using MVI (State + Actions + Events). This decouples business logic from any UI framework, making it testable and Compose-ready.</p>
+    </div>
+    <div class="benefit-block benefit-orange">
+      <div class="icon-box">2️⃣</div>
+      <h3>Then: Kotlin migration</h3>
+      <p>Replace all remaining Java classes with Kotlin. This unlocks coroutines, sealed classes, and eliminates the interop overhead that slows every developer down.</p>
+    </div>
+    <div class="benefit-block benefit-green">
+      <div class="icon-box">3️⃣</div>
+      <h3>Finally: Compose UI</h3>
+      <p>Once ViewModels are in place and the architecture is clean, Compose migration becomes incremental and safe — screen by screen, feature by feature.</p>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     TESTABILITY
+════════════════════════════════════════════════════════ -->
+<div class="container">
+<div class="section">
+  <div class="section-eyebrow">Testability</div>
+  <div class="section-title">Today's code cannot be tested safely</div>
+  <div class="section-sub">This is not a quality preference — it is a structural impossibility that directly causes production bugs.</div>
+
+  <div class="card-grid card-grid-2">
+
+    <div class="card">
+      <h3 style="font-size:15px; font-weight:700; margin-bottom:12px; color: var(--mg-red);">❌ Current state — no testability</h3>
+      <p style="font-size:13px; color:var(--text-secondary); line-height:1.7;">
+        Presenters hold a reference to the Android View. Running a test requires spinning up an Activity or Fragment, which means tests only run on a device or emulator — slowly. Business logic cannot be verified in isolation. A change in one part of the UI can silently break unrelated logic with no automated check to catch it.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:15px; font-weight:700; margin-bottom:12px; color: var(--mg-green);">✅ Target state — full testability</h3>
+      <p style="font-size:13px; color:var(--text-secondary); line-height:1.7;">
+        ViewModels expose state as a Flow. Business logic in use cases and repositories depends only on interfaces. Tests run in milliseconds on the JVM with no device needed. Every feature's ViewModel, repository, and use case can be fully covered with fast, reliable unit tests using JUnit5 + Turbine + fake repositories.
+      </p>
+    </div>
+
+  </div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     MIGRATION PHASES
+════════════════════════════════════════════════════════ -->
+<div class="container">
+<div class="section">
+  <div class="section-eyebrow">Migration Roadmap</div>
+  <div class="section-title">Four phases — incremental, low-risk delivery</div>
+  <div class="section-sub">The app is never rewritten from scratch. Each phase delivers working, shippable software. Old and new code coexist during the transition.</div>
+
+  <div class="phases">
+
+    <div class="phase phase-1">
+      <div class="phase-num">1</div>
+      <div class="phase-content">
+        <h3>Foundation — Build the new skeleton</h3>
+        <div class="phase-duration">Estimated: 6–8 weeks</div>
+        <p>Set up the multi-module Gradle structure with convention plugins, version catalogs, and the full <code>:core</code> module hierarchy. No user-visible change. This phase is purely enabling infrastructure — a new home where all future work will live. Also establish the testing infrastructure (JUnit5, Turbine, fake repositories) so every new module is born testable. Critically, this phase includes a structured spike to evaluate Koin vs Hilt and select the DI framework for the project (see dedicated section below).</p>
+        <div class="phase-tags">
+          <span class="phase-tag">Gradle multi-module setup</span>
+          <span class="phase-tag">Convention plugins</span>
+          <span class="phase-tag">:core modules</span>
+          <span class="phase-tag">Version catalog</span>
+          <span class="phase-tag">Test infrastructure</span>
+          <span class="phase-tag">DI framework spike (Koin vs Hilt)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase phase-2">
+      <div class="phase-num">2</div>
+      <div class="phase-content">
+        <h3>Java → Kotlin, Presenter → ViewModel</h3>
+        <div class="phase-duration">Estimated: 3–5 months (feature by feature)</div>
+        <p>For each feature, in order of priority: convert remaining Java classes to Kotlin, extract business logic from Presenters into ViewModels with MVI state, write unit tests for the new logic. The XML UI stays intact during this phase — ViewModels work with both XML and Compose, so this migration is safe to do before touching the UI layer.</p>
+        <div class="phase-tags">
+          <span class="phase-tag">Java → Kotlin</span>
+          <span class="phase-tag">Presenter → ViewModel</span>
+          <span class="phase-tag">MVI state design</span>
+          <span class="phase-tag">Unit test coverage</span>
+          <span class="phase-tag">Feature isolation</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase phase-3">
+      <div class="phase-num">3</div>
+      <div class="phase-content">
+        <h3>XML → Jetpack Compose</h3>
+        <div class="phase-duration">Estimated: 3–6 months (screen by screen)</div>
+        <p>With ViewModels in place, the UI migration to Compose becomes safe and incremental. Each screen is migrated individually. Compose interop allows old XML and new Compose screens to coexist in the same app at the same time. The <code>:core:design-system</code> module is built here, establishing the shared Compose component library for all features.</p>
+        <div class="phase-tags">
+          <span class="phase-tag">Jetpack Compose</span>
+          <span class="phase-tag">Design system</span>
+          <span class="phase-tag">Compose UI tests</span>
+          <span class="phase-tag">Compose Navigation</span>
+          <span class="phase-tag">Screen-by-screen</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase phase-4">
+      <div class="phase-num">4</div>
+      <div class="phase-content">
+        <h3>Full modularization &amp; cleanup</h3>
+        <div class="phase-duration">Estimated: 4–8 weeks</div>
+        <p>Complete the feature module extraction. Remove all legacy XML layouts and Presenter classes. Enforce Gradle dependency rules that prevent new cross-feature coupling. At this point the codebase matches the target architecture fully — new features can be added as self-contained modules without touching anything that exists.</p>
+        <div class="phase-tags">
+          <span class="phase-tag">Full feature modules</span>
+          <span class="phase-tag">Remove legacy code</span>
+          <span class="phase-tag">Enforced boundaries</span>
+          <span class="phase-tag">API/Impl modules</span>
+          <span class="phase-tag">Architecture docs</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     RISKS OF NOT ACTING
+════════════════════════════════════════════════════════ -->
+<div class="container">
+<div class="section">
+  <div class="section-eyebrow">Risk Assessment</div>
+  <div class="section-title">The cost of doing nothing</div>
+  <div class="section-sub">Delaying this refactoring is not a neutral choice — it actively increases risk and cost over time.</div>
+
+  <div class="card-grid" style="gap: 12px;">
+
+    <div class="risk-card risk-high">
+      <div class="risk-badge">Critical</div>
+      <div>
+        <h4>Feature delivery slows to a crawl</h4>
+        <p>As the monolith grows, each new feature added increases the complexity of the entire system. What takes 2 developer-days today will take 4–5 days in 12 months. Product commitments become unreliable.</p>
+      </div>
+    </div>
+
+    <div class="risk-card risk-high">
+      <div class="risk-badge">Critical</div>
+      <div>
+        <h4>Production bugs with no safety net</h4>
+        <p>Without testable architecture, every change is manual-QA-only. As the codebase grows, edge cases multiply and manual testing cannot cover them. The current setup guarantees an increasing rate of production regressions.</p>
+      </div>
+    </div>
+
+    <div class="risk-card risk-medium">
+      <div class="risk-badge">High</div>
+      <div>
+        <h4>Talent acquisition becomes harder</h4>
+        <p>Senior Android engineers expect modern tooling: Kotlin, Compose, MVI, clean architecture. Advertising a position that uses Java, XML, and Presenters as primary tools will narrow the talent pool significantly and signal technical debt to candidates.</p>
+      </div>
+    </div>
+
+    <div class="risk-card risk-medium">
+      <div class="risk-badge">High</div>
+      <div>
+        <h4>XML View system will lose support</h4>
+        <p>Google's investment in the XML View system has effectively stopped. Compose is the strategic direction for Android UI. The longer we stay on XML, the further we fall behind on platform capabilities, performance improvements, and OS-level UI features.</p>
+      </div>
+    </div>
+
+    <div class="risk-card risk-low">
+      <div class="risk-badge">Medium</div>
+      <div>
+        <h4>Parallel feature development becomes impossible</h4>
+        <p>In the current monolith, two developers working on different features frequently conflict in version control. Modular architecture allows completely parallel, conflict-free development — a prerequisite for scaling the team.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     BENEFITS
+════════════════════════════════════════════════════════ -->
+<div class="container">
+<div class="section">
+  <div class="section-eyebrow">Expected Outcomes</div>
+  <div class="section-title">What the team gains</div>
+
+  <div class="card-grid card-grid-3">
+
+    <div class="benefit-block benefit-blue">
+      <div class="icon-box">🚀</div>
+      <h3>Faster feature delivery</h3>
+      <p>Isolated modules mean new features never risk breaking existing ones. Developers work with confidence and fewer surprises.</p>
+    </div>
+
+    <div class="benefit-block benefit-green">
+      <div class="icon-box">🧪</div>
+      <h3>Reliable automated testing</h3>
+      <p>ViewModels and repositories are testable in milliseconds. Regressions are caught before review, not after deployment.</p>
+    </div>
+
+    <div class="benefit-block benefit-orange">
+      <div class="icon-box">⚡</div>
+      <h3>Faster build times</h3>
+      <p>Gradle only recompiles modules that changed. In a full multi-module project, incremental builds can be 40–60% faster.</p>
+    </div>
+
+    <div class="benefit-block benefit-blue">
+      <div class="icon-box">🤝</div>
+      <h3>Team scalability</h3>
+      <p>Multiple engineers can own different feature modules without stepping on each other. Clear ownership, fewer merge conflicts.</p>
+    </div>
+
+    <div class="benefit-block benefit-green">
+      <div class="icon-box">🎨</div>
+      <h3>Modern UI with Compose</h3>
+      <p>Jetpack Compose unlocks faster UI iteration, animated components, and full access to the latest Material Design 3 tooling.</p>
+    </div>
+
+    <div class="benefit-block benefit-orange">
+      <div class="icon-box">📖</div>
+      <h3>Easier onboarding</h3>
+      <p>A modular codebase with clear conventions means new team members are productive in days, not weeks.</p>
+    </div>
+
+  </div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     CLOSING CALLOUT
+════════════════════════════════════════════════════════ -->
+<div class="container">
+<div class="section">
+  <div class="callout">
+    <div class="callout-icon">🎯</div>
+    <div>
+      <h3>The right time to start was a year ago. The second best time is now.</h3>
+      <p>Every sprint we add new features to the current monolith is a sprint that makes the eventual migration larger and more expensive. This is not a request to stop feature development — it is a request to invest in the foundation that makes all future feature development faster, safer, and more sustainable. The phases are designed to deliver alongside product work, not instead of it.</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="footer">
+  <strong>marktguru Android — Architecture Refactoring Proposal</strong><br>
+  Prepared by the Engineering Team · For internal distribution only
+</div>
+
+</body>
+</html>
